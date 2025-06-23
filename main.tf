@@ -4,34 +4,36 @@ provider "aws" {
 
 # 1. VPC
 resource "aws_vpc" "eks_vpc" {
-  cidr_block = "10.0.0.0/16"
-  enable_dns_hostnames = true
+  cidr_block           = "10.0.0.0/16"
   enable_dns_support   = true
+  enable_dns_hostnames = true
+
   tags = {
     Name = "eks-vpc"
   }
 }
 
-# 2. Subnets
+# 2. Private Subnets (no public IPs)
+data "aws_availability_zones" "available" {}
+
 resource "aws_subnet" "eks_subnet" {
   count                   = 2
   vpc_id                  = aws_vpc.eks_vpc.id
   cidr_block              = cidrsubnet(aws_vpc.eks_vpc.cidr_block, 8, count.index)
   availability_zone       = data.aws_availability_zones.available.names[count.index]
-  map_public_ip_on_launch = true
+  map_public_ip_on_launch = false   # 🔐 Hardened: No public IPs
+
   tags = {
-    Name = "eks-subnet-${count.index}"
+    Name = "eks-private-subnet-${count.index}"
   }
 }
-
-data "aws_availability_zones" "available" {}
 
 # 3. Internet Gateway
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.eks_vpc.id
 }
 
-# 4. Route Table
+# 4. Route Table for NAT/Gateway (if needed)
 resource "aws_route_table" "public_rt" {
   vpc_id = aws_vpc.eks_vpc.id
 
@@ -68,13 +70,15 @@ resource "aws_iam_role_policy_attachment" "eks_AmazonEKSClusterPolicy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
 }
 
-# 6. EKS Cluster
+# 6. Hardened EKS Cluster (NO public access!)
 resource "aws_eks_cluster" "eks" {
   name     = var.cluster_name
   role_arn = aws_iam_role.eks_cluster_role.arn
 
   vpc_config {
-    subnet_ids = aws_subnet.eks_subnet[*].id
+    subnet_ids              = aws_subnet.eks_subnet[*].id
+    endpoint_public_access  = false   # 🚫 No public access to control plane
+    endpoint_private_access = true    # ✅ Private access only
   }
 
   depends_on = [
@@ -135,5 +139,5 @@ resource "aws_eks_node_group" "node_group" {
   ]
 }
 
-
-#aws eks update-kubeconfig --name my-eks-cluster --region us-east-2
+# CLI config hint:
+# aws eks update-kubeconfig --name <cluster_name> --region <region>
