@@ -2,6 +2,8 @@ provider "aws" {
   region = var.region
 }
 
+data "aws_availability_zones" "available" {}
+
 # VPC
 resource "aws_vpc" "eks_vpc" {
   cidr_block           = "10.0.0.0/16"
@@ -9,13 +11,11 @@ resource "aws_vpc" "eks_vpc" {
   enable_dns_hostnames = true
 
   tags = {
-    Name = "eks-vpc"
+    Name = "${var.user_id}-eks-vpc"
   }
 }
 
-data "aws_availability_zones" "available" {}
-
-# Create Public Subnet (for NAT Gateway)
+# Public subnet for NAT
 resource "aws_subnet" "public_subnet" {
   vpc_id                  = aws_vpc.eks_vpc.id
   cidr_block              = "10.0.1.0/24"
@@ -23,11 +23,11 @@ resource "aws_subnet" "public_subnet" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "eks-public-subnet"
+    Name = "${var.user_id}-eks-public-subnet"
   }
 }
 
-# Create Private Subnets for Nodes
+# Private subnets
 resource "aws_subnet" "private_subnet" {
   count                   = 2
   vpc_id                  = aws_vpc.eks_vpc.id
@@ -36,7 +36,7 @@ resource "aws_subnet" "private_subnet" {
   map_public_ip_on_launch = false
 
   tags = {
-    Name = "eks-private-subnet-${count.index}"
+    Name = "${var.user_id}-eks-private-subnet-${count.index}"
   }
 }
 
@@ -45,6 +45,7 @@ resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.eks_vpc.id
 }
 
+# Public route table
 resource "aws_route_table" "public_rt" {
   vpc_id = aws_vpc.eks_vpc.id
 
@@ -59,7 +60,7 @@ resource "aws_route_table_association" "public_assoc" {
   route_table_id = aws_route_table.public_rt.id
 }
 
-# NAT Gateway in public subnet
+# NAT Gateway
 resource "aws_eip" "nat_eip" {
   domain = "vpc"
 }
@@ -71,7 +72,7 @@ resource "aws_nat_gateway" "nat_gw" {
   depends_on = [aws_internet_gateway.igw]
 }
 
-# Private Route Tables with NAT
+# Private route table
 resource "aws_route_table" "private_rt" {
   vpc_id = aws_vpc.eks_vpc.id
 
@@ -87,9 +88,9 @@ resource "aws_route_table_association" "private_assoc" {
   route_table_id = aws_route_table.private_rt.id
 }
 
-# IAM for EKS Cluster
+# EKS Cluster IAM Role
 resource "aws_iam_role" "eks_cluster_role" {
-  name = "eks-cluster-role"
+  name = "${var.user_id}-eks-cluster-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -108,15 +109,15 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
 }
 
-# EKS Cluster (Private API)
+# EKS Cluster with private API
 resource "aws_eks_cluster" "eks" {
-  name     = var.cluster_name
+  name     = "${var.user_id}-eks-cluster"
   role_arn = aws_iam_role.eks_cluster_role.arn
 
   vpc_config {
     subnet_ids              = aws_subnet.private_subnet[*].id
-    endpoint_private_access = true
     endpoint_public_access  = false
+    endpoint_private_access = true
   }
 
   depends_on = [
@@ -124,9 +125,9 @@ resource "aws_eks_cluster" "eks" {
   ]
 }
 
-# IAM for Node Group
+# Node IAM Role
 resource "aws_iam_role" "eks_node_role" {
-  name = "eks-node-role"
+  name = "${var.user_id}-eks-node-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -140,32 +141,4 @@ resource "aws_iam_role" "eks_node_role" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "eks_node_policies" {
-  for_each = toset([
-    "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
-    "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
-    "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-  ])
-  role       = aws_iam_role.eks_node_role.name
-  policy_arn = each.value
-}
-
-# Node Group (private subnets, no public IP)
-resource "aws_eks_node_group" "node_group" {
-  cluster_name    = aws_eks_cluster.eks.name
-  node_group_name = "${var.cluster_name}-ng"
-  node_role_arn   = aws_iam_role.eks_node_role.arn
-  subnet_ids      = aws_subnet.private_subnet[*].id
-
-  scaling_config {
-    desired_size = 2
-    max_size     = 3
-    min_size     = 1
-  }
-
-  instance_types = ["t3.medium"]
-
-  depends_on = [
-    aws_iam_role_policy_attachment.eks_node_policies
-  ]
-}
+resource "aws_iam_role_policy_attach
