@@ -109,15 +109,18 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
 }
 
-# EKS Cluster (Private Endpoint Only)
+# ✅ EKS Cluster (Public & Private access enabled)
 resource "aws_eks_cluster" "eks" {
   name     = "${var.user_id}-eks-cluster"
   role_arn = aws_iam_role.eks_cluster_role.arn
 
   vpc_config {
     subnet_ids              = aws_subnet.private_subnet[*].id
-    endpoint_public_access  = false
-    endpoint_private_access = true
+    endpoint_public_access  = true         # ✅ Enable public access
+    endpoint_private_access = true         # ✅ Keep internal access
+
+    # Optional: restrict to your public IP only
+    # public_access_cidrs = ["X.X.X.X/32"]
   }
 
   depends_on = [
