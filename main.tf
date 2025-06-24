@@ -15,7 +15,7 @@ resource "aws_vpc" "eks_vpc" {
   }
 }
 
-# Public subnet (for NAT)
+# Public subnet for NAT
 resource "aws_subnet" "public_subnet" {
   vpc_id                  = aws_vpc.eks_vpc.id
   cidr_block              = "10.0.1.0/24"
@@ -40,12 +40,12 @@ resource "aws_subnet" "private_subnet" {
   }
 }
 
-# Internet Gateway for NAT
+# Internet Gateway
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.eks_vpc.id
 }
 
-# Route table for public subnet
+# Public Route Table
 resource "aws_route_table" "public_rt" {
   vpc_id = aws_vpc.eks_vpc.id
 
@@ -72,7 +72,7 @@ resource "aws_nat_gateway" "nat_gw" {
   depends_on = [aws_internet_gateway.igw]
 }
 
-# Route table for private subnets
+# Private Route Table
 resource "aws_route_table" "private_rt" {
   vpc_id = aws_vpc.eks_vpc.id
 
@@ -109,7 +109,7 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
 }
 
-# EKS Cluster (Private control plane)
+# EKS Cluster (Private Endpoint Only)
 resource "aws_eks_cluster" "eks" {
   name     = "${var.user_id}-eks-cluster"
   role_arn = aws_iam_role.eks_cluster_role.arn
@@ -120,10 +120,12 @@ resource "aws_eks_cluster" "eks" {
     endpoint_private_access = true
   }
 
-  depends_on = [aws_iam_role_policy_attachment.eks_cluster_policy]
+  depends_on = [
+    aws_iam_role_policy_attachment.eks_cluster_policy
+  ]
 }
 
-# IAM Role for Worker Nodes
+# EKS Node IAM Role
 resource "aws_iam_role" "eks_node_role" {
   name = "${var.user_id}-eks-node-role"
 
@@ -139,7 +141,7 @@ resource "aws_iam_role" "eks_node_role" {
   })
 }
 
-# Attach policies to node role
+# Attach Policies to Node Role
 resource "aws_iam_role_policy_attachment" "AmazonEKSWorkerNodePolicy" {
   role       = aws_iam_role.eks_node_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
@@ -155,7 +157,7 @@ resource "aws_iam_role_policy_attachment" "AmazonEC2ContainerRegistryReadOnly" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
-# EKS Node Group
+# Node Group
 resource "aws_eks_node_group" "node_group" {
   cluster_name    = aws_eks_cluster.eks.name
   node_group_name = "${var.user_id}-eks-ng"
