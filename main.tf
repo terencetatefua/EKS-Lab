@@ -15,7 +15,7 @@ resource "aws_vpc" "eks_vpc" {
   }
 }
 
-# Public subnet for NAT
+# Public subnet (for NAT)
 resource "aws_subnet" "public_subnet" {
   vpc_id                  = aws_vpc.eks_vpc.id
   cidr_block              = "10.0.1.0/24"
@@ -45,7 +45,7 @@ resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.eks_vpc.id
 }
 
-# Public route table
+# Route table for public subnet
 resource "aws_route_table" "public_rt" {
   vpc_id = aws_vpc.eks_vpc.id
 
@@ -72,7 +72,7 @@ resource "aws_nat_gateway" "nat_gw" {
   depends_on = [aws_internet_gateway.igw]
 }
 
-# Private route table
+# Route table for private subnets
 resource "aws_route_table" "private_rt" {
   vpc_id = aws_vpc.eks_vpc.id
 
@@ -93,13 +93,13 @@ resource "aws_iam_role" "eks_cluster_role" {
   name = "${var.user_id}-eks-cluster-role"
 
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
+    Version = "2012-10-17",
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Effect = "Allow",
       Principal = {
         Service = "eks.amazonaws.com"
-      }
+      },
+      Action = "sts:AssumeRole"
     }]
   })
 }
@@ -109,7 +109,7 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
 }
 
-# EKS Cluster with private API
+# EKS Cluster (Private control plane)
 resource "aws_eks_cluster" "eks" {
   name     = "${var.user_id}-eks-cluster"
   role_arn = aws_iam_role.eks_cluster_role.arn
@@ -120,25 +120,11 @@ resource "aws_eks_cluster" "eks" {
     endpoint_private_access = true
   }
 
-  depends_on = [
-    aws_iam_role_policy_attachment.eks_cluster_policy
-  ]
+  depends_on = [aws_iam_role_policy_attachment.eks_cluster_policy]
 }
 
-# Node IAM Role
+# IAM Role for Worker Nodes
 resource "aws_iam_role" "eks_node_role" {
   name = "${var.user_id}-eks-node-role"
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "ec2.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
-    }]
-  })
-}
-
-resource "aws_iam_role_policy_attach
+  assume_role_policy = jso
