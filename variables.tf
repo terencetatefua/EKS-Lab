@@ -1,9 +1,14 @@
 variable "region" {
-  type    = string
-  default = "us-east-2"  # update this to you own region
+  description = "AWS region"
+  default     = "us-east-2"
+}
+
+variable "user_id" {
+  description = "Unique user identifier (e.g. username or initials)"
+  type        = string
+  default     = "tnt"  ## update with your name
 }
 
 variable "cluster_name" {
-  type    = string
-  default = "tnt-eks-cluster"  #Update this to your own name
+  default = "eks-cluster"
 }
