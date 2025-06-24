@@ -1,11 +1,7 @@
-output "cluster_name" {
+output "eks_cluster_name" {
   value = aws_eks_cluster.eks.name
 }
 
-output "kubeconfig" {
-  value = aws_eks_cluster.eks.endpoint
-}
-
-output "ca_certificate" {
-  value = aws_eks_cluster.eks.certificate_authority[0].data
+output "kubeconfig_command" {
+  value = "aws eks update-kubeconfig --region ${var.region} --name ${aws_eks_cluster.eks.name}"
 }
